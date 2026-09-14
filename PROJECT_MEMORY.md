@@ -11,6 +11,17 @@
 
 The initial Site source repository was cloned directly and its HEAD matched the commit recorded for published Site version 1. That root commit is retained as the immutable release baseline. Later documentation commits do not alter the files served from `dist/`.
 
+## GitHub cutover
+
+- GitHub repository: `solisnoera/word-logic-relay` (public)
+- GitHub baseline commit: `169db1b1d84366593c0dd82d299169fd20db0ca9`
+- GitHub expanded-source/workflow commit: `103d71b79ecf12f4dbec231ff307921f492fb7a4`
+- Site version 2 was saved and deployed from commit `103d71b79ecf12f4dbec231ff307921f492fb7a4`.
+
+The GitHub root commit stores the complete Site version 1 source as `baseline/word-logic-relay-v2-source.tar.gz.base64`. Decoding and extracting that file reproduces the 18-file source tree of Site version 1 exactly. The next commit expands the source into the normal repository layout and adds the GitHub-first workflow documentation. From the cutover onward, the exact GitHub `main` commit is pushed to the Site source repository before a Site version is saved.
+
+Post-deployment comparison confirmed that the public `game.js`, `styles.css`, and `words.js` were byte-identical to GitHub `main`. The public `index.html` was identical after removing Cloudflare's response-time challenge script injection.
+
 ## Release invariants
 
 - `dist/` is the deployed static directory.
