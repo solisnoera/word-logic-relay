@@ -4,8 +4,8 @@ Generated from deterministic set operations on 2026-09-14 and revised by a curat
 
 ## Shipped dictionary
 
-- EASY: 769
-- HARD: 713
+- EASY: 770
+- HARD: 712
 - Total valid guesses / answer candidates: 1482
 - Every entry has an embedded Japanese gloss and part-of-speech label.
 - The word set itself remains unchanged from the published 1482-word baseline.
@@ -25,8 +25,8 @@ The original reverse-JMdict generation occasionally selected an awkward secondar
 
 This correction layer:
 
-- repairs 372 entries with clearly wrong, misleading, awkward, or school-inappropriate POS/Japanese glosses;
-- moves 64 obvious school/general vocabulary items from HARD to EASY without changing valid-guess coverage;
+- repairs 447 entries with clearly wrong, misleading, awkward, or school-inappropriate POS/Japanese glosses;
+- moves 65 obvious school/general vocabulary items from HARD to EASY without changing valid-guess coverage;
 - removes generic `word` POS labels from the corrected release data;
 - replaces inappropriate result-screen glosses such as slangy or insulting Japanese where a neutral definition is available;
 - keeps the complete 1482-word valid-guess set unchanged.
