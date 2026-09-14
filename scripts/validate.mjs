@@ -27,7 +27,7 @@ for (const entry of entries) {
   if (!/^[A-Z]{5}$/.test(word)) throw new Error(`Bad word: ${word}`);
   if (!/[eh]/.test(level) || level.length !== 1) throw new Error(`Bad level: ${word}`);
   if (keys.has(word)) throw new Error(`Duplicate: ${word}`);
-  if (!pos.trim() || !ja.trim()) throw new Error(`Missing metadata: ${word}`);
+  if (typeof pos !== "string" || typeof ja !== "string" || !ja.trim()) throw new Error(`Missing metadata: ${word}`);
   if (pos === "word") throw new Error(`Generic POS remains: ${word}`);
   keys.add(word);
   byWord.set(word, { level, pos, ja });
@@ -111,5 +111,5 @@ if (!fs.existsSync(expansionReport)) throw new Error("Dictionary expansion repor
 console.log(JSON.stringify({
   status: "ok", total: keys.size, easy: easy.size, hard: hard.size,
   duplicateLetterCases: cases.length, runtimeExternalCalls: 0,
-  metadataFixLayer: true, expansionReport: true
+  metadataFixLayer: true, optionalPos: true, expansionReport: true
 }));
