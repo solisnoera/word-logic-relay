@@ -5,7 +5,9 @@ Dedicated, self-contained implementation of the five-letter relay game. The sour
 Published Site: https://word-logic-relay-v2.riyo-timid.chatgpt.site
 
 - Runtime: static HTML/CSS/JavaScript
-- Dictionary: embedded local canonical data
+- Dictionary: 1482 embedded local valid words / answer candidates
+- Current answer pools: EASY 769 / HARD 713
+- Dictionary corrections: `dist/assets/metadata-fixes.js` repairs reviewed POS/Japanese glosses and obvious difficulty classifications without changing the word set
 - External runtime calls: none
 - Reference snapshot: `reference/original-word-logic-relay.html`
 
@@ -13,7 +15,7 @@ Published Site: https://word-logic-relay-v2.riyo-timid.chatgpt.site
 
 The `main` branch of this repository is the single source of truth. Do not edit the ChatGPT Site directly. Make and verify changes here first, then publish the same committed revision to the existing Site.
 
-The repository's root commit is the source revision used by the initial published Site version. See `PROJECT_MEMORY.md` for the baseline provenance and release checks.
+The repository's root commit is the source revision used by the initial published Site version. See `PROJECT_MEMORY.md` for the baseline provenance and release checks, and `docs/dictionary-audit.md` for dictionary construction and metadata-quality details.
 
 ## Update and publish workflow
 
@@ -22,7 +24,7 @@ The repository's root commit is the source revision used by the initial publishe
 3. Commit and push the verified revision to GitHub `main`.
 4. In ChatGPT Work, open this repository and the existing Site project identified by `.openai/hosting.json`.
 5. Push that exact GitHub `main` revision to the Site source repository, save a Site version from the same commit, and deploy it without changing the current audience.
-6. After deployment, smoke-test the public URL: title screen, EASY/HARD selection, at least one normal mode, keyboard input, result display, and browser console/network errors.
+6. After deployment, smoke-test the public URL: title screen, EASY/HARD selection, at least one normal mode, keyboard input, result display/definitions, and browser console/network errors.
 7. Record any lasting design decision or deployment lesson in `DECISIONS.md` or `PROJECT_MEMORY.md`.
 
 Run validation with:
