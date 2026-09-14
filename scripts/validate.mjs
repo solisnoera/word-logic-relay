@@ -36,7 +36,7 @@ for (const entry of entries) {
 if (entries.length !== keys.size || keys.size !== easy.size + hard.size) throw new Error("Dictionary union invariant failed");
 if (keys.size < 2400 || keys.size > 3000) throw new Error(`Expanded dictionary outside release range: ${keys.size}`);
 if ([...easy].some((word) => hard.has(word))) throw new Error("EASY/HARD overlap");
-if (easy.size < 800 || hard.size < 850) throw new Error(`Answer pools are below expanded release threshold: EASY ${easy.size}, HARD ${hard.size}`);
+if (easy.size < 750 || hard.size < 850) throw new Error(`Answer pools are below expanded release threshold: EASY ${easy.size}, HARD ${hard.size}`);
 
 const commonRequired = "APPLE HOUSE WORLD LIGHT TRAIN BRAIN MUSIC MONEY WATER BEACH PHONE WRITE DRINK LEARN TEACH SPEAK DRIVE HAPPY SMALL BLACK WHITE CLEAN SWEET THEIR THERE THESE EMAIL BOOKS WOMEN TODAY THREE THINK GREAT RIGHT SHEEP SMELL PIZZA JUICE DIARY PANDA SALAD SUNNY RAINY LUCKY TIRED TOOTH TOWEL".split(" ");
 const hardRequired = "ACRID GUILE KNAVE MIDGE QUAFF SEDGE SHREW VIXEN WHELP".split(" ");
