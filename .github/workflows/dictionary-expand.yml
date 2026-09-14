@@ -7,8 +7,11 @@ on:
     paths:
       - scripts/expand_dictionary.py
       - scripts/audit_inflections.py
+      - scripts/build_answer_policy.py
+      - scripts/apply_answer_policy.py
       - scripts/validate.mjs
       - dist/assets/game.js
+      - dist/index.html
       - .github/workflows/dictionary-expand.yml
 
 permissions:
@@ -29,25 +32,29 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install morphology dependency
+        run: python -m pip install --disable-pip-version-check --quiet lemminflect==0.2.3
       - name: Build expanded local dictionary
         run: python scripts/expand_dictionary.py
+      - name: Build answer eligibility policy
+        run: python scripts/build_answer_policy.py
+      - name: Apply answer eligibility to game runtime
+        run: python scripts/apply_answer_policy.py
       - name: Validate release invariants
         run: node scripts/validate.mjs
-      - name: Install inflection audit dependency
-        run: python -m pip install --disable-pip-version-check --quiet lemminflect==0.2.3
       - name: Audit inflectional forms
         run: python scripts/audit_inflections.py
       - name: Check diff
         run: git diff --check
-      - name: Commit generated dictionary
+      - name: Commit generated dictionary and answer policy
         shell: bash
         run: |
-          git add dist/assets/words.js docs/dictionary-expansion-report.md
+          git add dist/assets/words.js dist/assets/answer-exclusions.js dist/assets/game.js docs/dictionary-expansion-report.md docs/answer-policy-report.md
           if git diff --cached --quiet; then
-            echo "No generated dictionary changes."
+            echo "No generated release changes."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Expand embedded dictionary"
+          git commit -m "Regenerate dictionary and answer policy"
           git push
