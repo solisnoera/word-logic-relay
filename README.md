@@ -6,7 +6,7 @@ Published Site: https://word-logic-relay-v2.riyo-timid.chatgpt.site
 
 - Runtime: static HTML/CSS/JavaScript
 - Dictionary: 1482 embedded local valid words / answer candidates
-- Current answer pools: EASY 769 / HARD 713
+- Current answer pools: EASY 770 / HARD 712
 - Dictionary corrections: `dist/assets/metadata-fixes.js` repairs reviewed POS/Japanese glosses and obvious difficulty classifications without changing the word set
 - External runtime calls: none
 - Reference snapshot: `reference/original-word-logic-relay.html`
