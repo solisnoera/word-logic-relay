@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - scripts/expand_dictionary.py
+      - scripts/audit_inflections.py
       - scripts/validate.mjs
       - dist/assets/game.js
       - .github/workflows/dictionary-expand.yml
@@ -32,6 +33,8 @@ jobs:
         run: python scripts/expand_dictionary.py
       - name: Validate release invariants
         run: node scripts/validate.mjs
+      - name: Audit inflectional forms
+        run: python scripts/audit_inflections.py
       - name: Check diff
         run: git diff --check
       - name: Commit generated dictionary
