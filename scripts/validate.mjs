@@ -104,7 +104,7 @@ vm.runInContext(`${bonusMatch[0]};globalThis.applyTimeBonus=applyTimeBonus;`, co
 if (context.applyTimeBonus(179, 1) !== 189 || context.applyTimeBonus(42, 3) !== 72) throw new Error("TIME bonus failed");
 
 const audit = fs.readFileSync(path.join(root, "docs/dictionary-audit.md"), "utf8");
-if (!audit.includes("Remaining plausible/valid candidates not added: 0")) throw new Error("Coverage audit is unresolved");
+if (!audit.includes("Remaining candidates: none")) throw new Error("Coverage audit is unresolved");
 const expansionReport = path.join(root, "docs/dictionary-expansion-report.md");
 if (!fs.existsSync(expansionReport)) throw new Error("Dictionary expansion report missing");
 
