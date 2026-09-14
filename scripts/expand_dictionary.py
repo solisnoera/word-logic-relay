@@ -176,8 +176,6 @@ def main() -> None:
     ejdict = load_ejdict()
     pos_index = build_pos_index(load_jmdict_common())
 
-    # Wordle lists define validity. Google frequency only broadens/prioritizes valid
-    # guesses; it does not automatically promote those words into EASY answers.
     candidates = (alex | ((ej_frequency | common_ranked) & tab)) - baseline_words - REJECT
     additions: list[list[str]] = []
     rejected_no_meaning = 0
@@ -216,8 +214,8 @@ def main() -> None:
     hard_total = len(entries) - easy_total
     added_easy = sum(1 for entry in additions if entry[1] == "e")
     added_hard = len(additions) - added_easy
-    easy_sample = ", ".join(entry[0] for entry in additions if entry[1] == "e")[:700]
-    hard_sample = ", ".join(entry[0] for entry in additions if entry[1] == "h")[:700]
+    easy_sample = ", ".join(entry[0] for entry in additions if entry[1] == "e")[:700].rstrip(", ")
+    hard_sample = ", ".join(entry[0] for entry in additions if entry[1] == "h")[:700].rstrip(", ")
 
     REPORT_PATH.write_text(f"""# Dictionary expansion report
 
