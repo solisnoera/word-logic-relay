@@ -7,6 +7,7 @@ const root = path.resolve(import.meta.dirname, "..");
 const dist = path.join(root, "dist");
 const wordsSource = fs.readFileSync(path.join(dist, "assets/words.js"), "utf8");
 const fixesSource = fs.readFileSync(path.join(dist, "assets/metadata-fixes.js"), "utf8");
+const exclusionsSource = fs.readFileSync(path.join(dist, "assets/answer-exclusions.js"), "utf8");
 const gameSource = fs.readFileSync(path.join(dist, "assets/game.js"), "utf8");
 const indexSource = fs.readFileSync(path.join(dist, "index.html"), "utf8");
 const styleSource = fs.readFileSync(path.join(dist, "assets/styles.css"), "utf8");
@@ -14,7 +15,9 @@ const styleSource = fs.readFileSync(path.join(dist, "assets/styles.css"), "utf8"
 const dictionaryContext = vm.createContext({ window: {} });
 vm.runInContext(wordsSource, dictionaryContext);
 vm.runInContext(fixesSource, dictionaryContext);
+vm.runInContext(exclusionsSource, dictionaryContext);
 const entries = dictionaryContext.window.WORD_DATA;
+const exclusions = new Set(dictionaryContext.window.ANSWER_EXCLUSIONS || []);
 if (!Array.isArray(entries)) throw new Error("Canonical dictionary payload not found");
 
 const keys = new Set();
@@ -36,12 +39,19 @@ for (const entry of entries) {
 if (entries.length !== keys.size || keys.size !== easy.size + hard.size) throw new Error("Dictionary union invariant failed");
 if (keys.size < 2400 || keys.size > 3000) throw new Error(`Expanded dictionary outside release range: ${keys.size}`);
 if ([...easy].some((word) => hard.has(word))) throw new Error("EASY/HARD overlap");
-if (easy.size < 750 || hard.size < 850) throw new Error(`Answer pools are below expanded release threshold: EASY ${easy.size}, HARD ${hard.size}`);
+for (const word of exclusions) if (!keys.has(word)) throw new Error(`Answer exclusion is not a valid word: ${word}`);
+
+const easyAnswers = new Set([...easy].filter((word) => !exclusions.has(word)));
+const hardAnswers = new Set([...hard].filter((word) => !exclusions.has(word)));
+if (easyAnswers.size < 700 || hardAnswers.size < 1500) {
+  throw new Error(`Filtered answer pools are below release threshold: EASY ${easyAnswers.size}, HARD ${hardAnswers.size}`);
+}
+if (!keys.has("WEEKS") || !exclusions.has("WEEKS")) throw new Error("WEEKS must remain a valid guess but not an answer candidate");
 
 const commonRequired = "APPLE HOUSE WORLD LIGHT TRAIN BRAIN MUSIC MONEY WATER BEACH PHONE WRITE DRINK LEARN TEACH SPEAK DRIVE HAPPY SMALL BLACK WHITE CLEAN SWEET THEIR THERE THESE EMAIL BOOKS WOMEN TODAY THREE THINK GREAT RIGHT SHEEP SMELL PIZZA JUICE DIARY PANDA SALAD SUNNY RAINY LUCKY TIRED TOOTH TOWEL".split(" ");
 const hardRequired = "ACRID GUILE KNAVE MIDGE QUAFF SEDGE SHREW VIXEN WHELP".split(" ");
-for (const word of commonRequired) if (!easy.has(word)) throw new Error(`Missing common EASY word: ${word}`);
-for (const word of hardRequired) if (!hard.has(word)) throw new Error(`Missing required HARD word: ${word}`);
+for (const word of commonRequired) if (!keys.has(word)) throw new Error(`Missing common valid guess: ${word}`);
+for (const word of hardRequired) if (!hardAnswers.has(word)) throw new Error(`Missing required HARD answer: ${word}`);
 
 const exactMetadata = {
   CHEEK: ["noun", "頬"],
@@ -68,7 +78,7 @@ for (const [word, data] of byWord) {
 const networkTokens = [/\bfetch\s*\(/, /XMLHttpRequest/, /WebSocket/, /EventSource/, /datamuse/i, /https?:\/\//];
 for (const [name, source] of [
   ["index.html", indexSource], ["styles.css", styleSource], ["game.js", gameSource],
-  ["words.js", wordsSource], ["metadata-fixes.js", fixesSource]
+  ["words.js", wordsSource], ["metadata-fixes.js", fixesSource], ["answer-exclusions.js", exclusionsSource]
 ]) {
   for (const token of networkTokens) if (token.test(source)) throw new Error(`Runtime network token ${token} in ${name}`);
 }
@@ -78,13 +88,14 @@ for (const ref of [...indexSource.matchAll(/(?:src|href)="([^"]+)"/g)].map((item
   const target = path.resolve(dist, ref.split("#")[0]);
   if (!fs.existsSync(target)) throw new Error(`Missing local asset: ${ref}`);
 }
-const loadOrder = ["assets/words.js", "assets/metadata-fixes.js", "assets/game.js"].map((name) => indexSource.indexOf(name));
-if (loadOrder.some((index) => index < 0) || !(loadOrder[0] < loadOrder[1] && loadOrder[1] < loadOrder[2])) {
-  throw new Error("Dictionary correction asset load order is invalid");
+const loadOrder = ["assets/words.js", "assets/metadata-fixes.js", "assets/answer-exclusions.js", "assets/game.js"].map((name) => indexSource.indexOf(name));
+if (loadOrder.some((index) => index < 0) || !(loadOrder[0] < loadOrder[1] && loadOrder[1] < loadOrder[2] && loadOrder[2] < loadOrder[3])) {
+  throw new Error("Dictionary/answer-policy asset load order is invalid");
 }
 
 execFileSync(process.execPath, ["--check", path.join(dist, "assets/game.js")], { stdio: "inherit" });
 execFileSync(process.execPath, ["--check", path.join(dist, "assets/metadata-fixes.js")], { stdio: "inherit" });
+execFileSync(process.execPath, ["--check", path.join(dist, "assets/answer-exclusions.js")], { stdio: "inherit" });
 const judgeMatch = gameSource.match(/function judge\(guess, target\) \{[\s\S]*?\n  \}/);
 if (!judgeMatch) throw new Error("Judge implementation not found");
 const context = vm.createContext({});
@@ -107,9 +118,12 @@ const audit = fs.readFileSync(path.join(root, "docs/dictionary-audit.md"), "utf8
 if (!audit.includes("Remaining candidates: none")) throw new Error("Coverage audit is unresolved");
 const expansionReport = path.join(root, "docs/dictionary-expansion-report.md");
 if (!fs.existsSync(expansionReport)) throw new Error("Dictionary expansion report missing");
+const answerPolicyReport = path.join(root, "docs/answer-policy-report.md");
+if (!fs.existsSync(answerPolicyReport)) throw new Error("Answer policy report missing");
 
 console.log(JSON.stringify({
   status: "ok", total: keys.size, easy: easy.size, hard: hard.size,
+  easyAnswers: easyAnswers.size, hardAnswers: hardAnswers.size, answerExcluded: exclusions.size,
   duplicateLetterCases: cases.length, runtimeExternalCalls: 0,
-  metadataFixLayer: true, optionalPos: true, expansionReport: true
+  metadataFixLayer: true, optionalPos: true, expansionReport: true, answerPolicyReport: true
 }));
