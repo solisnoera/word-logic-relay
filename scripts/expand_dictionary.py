@@ -25,7 +25,6 @@ EJ_SRC = "https://raw.githubusercontent.com/kujirahand/EJDict/master/src/{letter
 EJ_FREQ = "https://raw.githubusercontent.com/kujirahand/EJDict/master/frequency/2000.txt"
 JMDICT_RELEASE_URL = "https://api.github.com/repos/scriptin/jmdict-simplified/releases/latest"
 
-# Proper names, brands, abbreviations, slurs and unsuitable answer candidates.
 REJECT = set("""
 BITCH BOOBS BOOBY BONER DICKS DILDO DYKEE FAGOT FANNY FUCKS HANDY HORNY HYMEN
 INCEL JAMES JAPAN JESUS JIHAD JIMMY LINUX MECCA MENSA PETER PUBIC PUBIS PUSSY
@@ -41,7 +40,7 @@ JP_BAD = (
 
 
 def request_bytes(url: str) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": "word-logic-relay-dictionary-builder/2.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": "word-logic-relay-dictionary-builder/2.1"})
     with urllib.request.urlopen(req, timeout=120) as response:
         return response.read()
 
@@ -83,13 +82,11 @@ def load_ejdict() -> dict[str, str]:
 def clean_ej_meaning(raw: str) -> str | None:
     if not raw or raw.startswith("=") or "《差別的表現》" in raw:
         return None
-    # Prefer the first dictionary sense; the result screen only needs a concise hint.
     text = raw.split(" / ", 1)[0].strip()
     text = re.sub(r"《[^》]*》", "", text)
     text = re.sub(r"〈[^〉]*〉", "", text)
     text = re.sub(r"\{[^}]*\}", "", text)
     text = text.replace("『", "").replace("』", "").strip()
-    # Remove a leading usage qualifier and long parenthetical explanations.
     text = re.sub(r"^[（(][^）)]{0,24}[）)]", "", text).strip()
     text = re.sub(r"[（(][^）)]{5,}[）)]", "", text).strip()
     text = text.split(";", 1)[0].strip()
@@ -107,10 +104,7 @@ def clean_ej_meaning(raw: str) -> str | None:
 def load_jmdict_common() -> dict:
     release = json.loads(request_text(JMDICT_RELEASE_URL))
     assets = release.get("assets", [])
-    matches = [
-        a for a in assets
-        if a.get("name", "").startswith("jmdict-eng-common-") and a.get("name", "").endswith(".json.zip")
-    ]
+    matches = [a for a in assets if a.get("name", "").startswith("jmdict-eng-common-") and a.get("name", "").endswith(".json.zip")]
     if not matches:
         raise RuntimeError("Could not locate latest jmdict-eng-common JSON zip")
     raw = request_bytes(matches[0]["browser_download_url"])
@@ -122,33 +116,27 @@ def load_jmdict_common() -> dict:
 
 
 def pos_category(tags: list[str]) -> str | None:
-    tags = [str(tag).lower() for tag in tags]
+    joined = " ".join(str(tag).lower() for tag in tags)
     categories: list[str] = []
-    if any(tag.startswith("adj") for tag in tags): categories.append("adjective")
-    if any(tag.startswith("adv") for tag in tags): categories.append("adverb")
-    if any(re.match(r"^v(?:1|5|s|k|r|t|i|n|u|z|unspec)", tag) or tag == "vs" for tag in tags): categories.append("verb")
-    if any(tag == "n" or tag.startswith("n-") or tag in {"pn", "num"} for tag in tags): categories.append("noun")
-    if any(tag.startswith("conj") for tag in tags): categories.append("conjunction")
-    if any(tag.startswith("prt") for tag in tags): categories.append("particle")
+    if "adj" in joined: categories.append("adjective")
+    if "adv" in joined: categories.append("adverb")
+    if "verb" in joined or re.search(r"\bv[15skrtinuz]", joined): categories.append("verb")
+    if "noun" in joined or re.search(r"(^|\s)n($|\s|-)", joined): categories.append("noun")
+    if "conj" in joined: categories.append("conjunction")
     if not categories:
         return None
-    ordered: list[str] = []
-    for category in categories:
-        if category not in ordered:
-            ordered.append(category)
-    return "/".join(ordered[:2])
+    return "/".join(dict.fromkeys(categories))
 
 
 def build_pos_index(data: dict) -> dict[str, str]:
     gathered: dict[str, list[str]] = {}
     for entry in data.get("words", []):
         for sense in entry.get("sense", []):
-            tags = sense.get("partOfSpeech", [])
             for gloss in sense.get("gloss", []):
                 key = str(gloss.get("text", "")).strip().lower()
                 if re.fullmatch(r"[a-z]{5}", key):
-                    gathered.setdefault(key, []).extend(tags)
-    result: dict[str, str] = {}
+                    gathered.setdefault(key, []).extend(sense.get("partOfSpeech", []))
+    result = {}
     for word, tags in gathered.items():
         pos = pos_category(tags)
         if pos:
@@ -156,50 +144,43 @@ def build_pos_index(data: dict) -> dict[str, str]:
     return result
 
 
+def ejdict_pos(raw: str) -> str:
+    categories: list[str] = []
+    if "{形}" in raw: categories.append("adjective")
+    if "{副}" in raw: categories.append("adverb")
+    if "{動}" in raw: categories.append("verb")
+    if "〈C〉" in raw or "〈U〉" in raw: categories.append("noun")
+    return "/".join(dict.fromkeys(categories))
+
+
 def main() -> None:
     baseline = load_base_entries()
     baseline_words = {entry[0] for entry in baseline}
-
     tab = set(five_letter_words(request_text(TAB_URL)))
     alex = set(five_letter_words(request_text(ALEX_URL)))
     frequency = set(five_letter_words(request_text(EJ_FREQ)))
     ejdict = load_ejdict()
     pos_index = build_pos_index(load_jmdict_common())
 
-    # Hidden-answer words provide the broad, puzzle-suitable pool. Frequency-list
-    # words that Wordle accepts are also admitted so obvious general words are not rejected.
     candidates = (alex | (frequency & tab)) - baseline_words - REJECT
     additions: list[list[str]] = []
     rejected_no_meaning = 0
-    rejected_no_pos = 0
+    optional_pos_missing = 0
     for word in sorted(candidates):
-        meaning = clean_ej_meaning(ejdict.get(word.lower(), ""))
+        raw = ejdict.get(word.lower(), "")
+        meaning = clean_ej_meaning(raw)
         if not meaning:
             rejected_no_meaning += 1
             continue
-        pos = pos_index.get(word.lower())
+        pos = pos_index.get(word.lower()) or ejdict_pos(raw)
         if not pos:
-            # EJDict explicitly marks countable/uncountable nouns on many entries.
-            raw = ejdict.get(word.lower(), "")
-            if "〈C〉" in raw or "〈U〉" in raw:
-                pos = "noun"
-            elif "{形}" in raw:
-                pos = "adjective"
-            elif "{副}" in raw:
-                pos = "adverb"
-            elif "{動}" in raw:
-                pos = "verb"
-        if not pos:
-            rejected_no_pos += 1
-            continue
+            optional_pos_missing += 1
+            pos = ""
         level = "e" if word in frequency else "h"
         additions.append([word, level, pos, meaning])
 
-    # EASY/common entries first, then Wordle hidden-answer HARD entries. We target a
-    # bounded set rather than admitting the full 14k+ valid-guess list.
     additions.sort(key=lambda entry: (0 if entry[1] == "e" else 1, entry[0]))
-    slots = max(0, TARGET_TOTAL - len(baseline))
-    additions = additions[:slots]
+    additions = additions[: max(0, TARGET_TOTAL - len(baseline))]
     entries = baseline + additions
 
     if len(entries) < 2400:
@@ -234,7 +215,7 @@ Generated by `scripts/expand_dictionary.py`.
 - Added EASY: {added_easy}
 - Added HARD: {added_hard}
 - Rejected for missing/unsafe concise EJDict meaning: {rejected_no_meaning}
-- Rejected for unresolved POS: {rejected_no_pos}
+- Added entries with optional POS omitted because it could not be resolved confidently: {optional_pos_missing}
 - Target ceiling: {TARGET_TOTAL}
 
 ## Selection policy
@@ -244,8 +225,8 @@ Generated by `scripts/expand_dictionary.py`.
 - `tabatkins/wordle-list` (MIT) is used only to admit additional high-frequency valid guesses.
 - EJDict (CC0/Public Domain) supplies direct English-to-Japanese glosses.
 - EJDict's 2,000-word frequency list determines additional EASY candidates.
-- JMdict common data is used only for structured part-of-speech resolution when available.
-- Entries without a concise school-safe Japanese gloss or a defensible POS are skipped.
+- JMdict common data and EJDict markers supply POS where they resolve cleanly; POS is intentionally optional rather than guessed.
+- Entries without a concise school-safe Japanese gloss are skipped.
 - Runtime remains fully local; no source is queried during gameplay.
 
 ## Samples
@@ -259,7 +240,8 @@ HARD additions: {hard_sample or 'none'}
         "baseline": len(baseline), "added": len(additions), "total": len(entries),
         "easy": easy_total, "hard": hard_total,
         "added_easy": added_easy, "added_hard": added_hard,
-        "rejected_no_meaning": rejected_no_meaning, "rejected_no_pos": rejected_no_pos,
+        "rejected_no_meaning": rejected_no_meaning,
+        "optional_pos_missing": optional_pos_missing,
     }, ensure_ascii=False))
 
 
