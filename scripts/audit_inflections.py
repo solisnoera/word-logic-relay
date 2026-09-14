@@ -1,23 +1,15 @@
 #!/usr/bin/env python3
-"""Audit regular inflectional forms in the shipped five-letter dictionary."""
+"""Audit inflectional forms in the shipped five-letter dictionary."""
 from __future__ import annotations
 
 import json
 import re
-import string
-import urllib.request
 from pathlib import Path
+
+from lemminflect import getInflection, getLemma
 
 ROOT = Path(__file__).resolve().parents[1]
 WORDS_PATH = ROOT / "dist" / "assets" / "words.js"
-EJDICT_REV = "5e1a630bfabb2791a78d14e4e356d85bb6437e34"
-EJ_SRC = f"https://raw.githubusercontent.com/kujirahand/EJDict/{EJDICT_REV}/src/{{letter}}.txt"
-
-
-def request_text(url: str) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": "word-logic-relay-inflection-audit/1.1"})
-    with urllib.request.urlopen(req, timeout=120) as response:
-        return response.read().decode("utf-8")
 
 
 def load_words() -> list[str]:
@@ -28,91 +20,83 @@ def load_words() -> list[str]:
     return [entry[0].lower() for entry in json.loads(match.group(1))]
 
 
-def load_ejdict_lexicon() -> tuple[set[str], set[str], set[str]]:
-    heads: set[str] = set()
-    countable_nouns: set[str] = set()
-    verbs: set[str] = set()
-    for letter in string.ascii_lowercase:
-        for line in request_text(EJ_SRC.format(letter=letter)).splitlines():
-            if "\t" not in line:
-                continue
-            head, meaning = line.split("\t", 1)
-            for variant in head.split(","):
-                word = variant.strip().lower()
-                if not re.fullmatch(r"[a-z]+", word):
-                    continue
-                heads.add(word)
-                if "〈C〉" in meaning:
-                    countable_nouns.add(word)
-                if "{動}" in meaning:
-                    verbs.add(word)
-    return heads, countable_nouns, verbs
+def regular_plural(lemma: str) -> set[str]:
+    if re.search(r"[^aeiou]y$", lemma):
+        return {lemma[:-1] + "ies"}
+    if re.search(r"(?:s|x|z|ch|sh)$", lemma):
+        return {lemma + "es"}
+    return {lemma + "s"}
 
 
-def plural_base(word: str, nouns: set[str]) -> str | None:
-    # spelling alternations first
-    if word.endswith("ies") and (word[:-3] + "y") in nouns:
-        return word[:-3] + "y"
-    if word.endswith("ves"):
-        for base in (word[:-3] + "f", word[:-3] + "fe"):
-            if base in nouns:
-                return base
-    # plain -s: WEEKS -> WEEK, SHOES -> SHOE
-    if word.endswith("s") and not word.endswith("ss") and word[:-1] in nouns:
-        return word[:-1]
-    # -es: BOXES -> BOX, BUSES -> BUS
-    if word.endswith("es") and word[:-2] in nouns:
-        return word[:-2]
-    return None
+def regular_past(lemma: str) -> set[str]:
+    if lemma.endswith("e"):
+        return {lemma + "d"}
+    if re.search(r"[^aeiou]y$", lemma):
+        return {lemma[:-1] + "ied"}
+    return {lemma + "ed"}
 
 
-def past_base(word: str, verbs: set[str]) -> str | None:
-    if word.endswith("ied") and (word[:-3] + "y") in verbs:
-        return word[:-3] + "y"
-    if not word.endswith("ed"):
-        return None
-    # silent-e verbs take only -d: MOVED -> MOVE
-    if word[:-1].endswith("e") and word[:-1] in verbs:
-        return word[:-1]
-    # ordinary -ed: ASKED -> ASK, ADDED -> ADD
-    if word[:-2] in verbs:
-        return word[:-2]
-    return None
+def classify(words: list[str]) -> dict[str, list[tuple[str, str]]]:
+    regular_plurals: list[tuple[str, str]] = []
+    irregular_plurals: list[tuple[str, str]] = []
+    regular_pasts: list[tuple[str, str]] = []
+    irregular_pasts: list[tuple[str, str]] = []
+    ing_forms: list[tuple[str, str]] = []
 
+    for word in words:
+        noun_lemmas = getLemma(word, upos="NOUN") or ()
+        for lemma in noun_lemmas:
+            generated = set(getInflection(lemma, tag="NNS") or ())
+            if word != lemma and word in generated:
+                target = regular_plurals if word in regular_plural(lemma) else irregular_plurals
+                pair = (word.upper(), lemma.upper())
+                if pair not in target:
+                    target.append(pair)
+                break
 
-def ing_base(word: str, verbs: set[str]) -> str | None:
-    if not word.endswith("ing"):
-        return None
-    stem = word[:-3]
-    if stem in verbs:
-        return stem
-    # ie -> y must be checked before generic silent-e restoration.
-    if word.endswith("ying") and (word[:-4] + "ie") in verbs:
-        return word[:-4] + "ie"
-    # silent-e deletion: USING -> USE, AGING -> AGE
-    if (stem + "e") in verbs:
-        return stem + "e"
-    if len(stem) >= 2 and stem[-1] == stem[-2] and stem[:-1] in verbs:
-        return stem[:-1]
-    return None
+        verb_lemmas = getLemma(word, upos="VERB") or ()
+        for lemma in verb_lemmas:
+            past_generated = set(getInflection(lemma, tag="VBD") or ()) | set(getInflection(lemma, tag="VBN") or ())
+            if word != lemma and word in past_generated:
+                target = regular_pasts if word in regular_past(lemma) else irregular_pasts
+                pair = (word.upper(), lemma.upper())
+                if pair not in target:
+                    target.append(pair)
+                break
+        for lemma in verb_lemmas:
+            generated = set(getInflection(lemma, tag="VBG") or ())
+            if word != lemma and word in generated:
+                pair = (word.upper(), lemma.upper())
+                if pair not in ing_forms:
+                    ing_forms.append(pair)
+                break
+
+    return {
+        "regular_plurals": regular_plurals,
+        "irregular_plurals": irregular_plurals,
+        "regular_pasts": regular_pasts,
+        "irregular_pasts": irregular_pasts,
+        "ing_forms": ing_forms,
+    }
 
 
 def main() -> None:
     words = load_words()
-    _, nouns, verbs = load_ejdict_lexicon()
-    plural = [(w.upper(), b.upper()) for w in words if (b := plural_base(w, nouns))]
-    past = [(w.upper(), b.upper()) for w in words if (b := past_base(w, verbs))]
-    ing = [(w.upper(), b.upper()) for w in words if (b := ing_base(w, verbs))]
-    union = {w for w, _ in plural + past + ing}
+    groups = classify(words)
+    simple_union = {
+        word
+        for key in ("regular_plurals", "regular_pasts", "ing_forms")
+        for word, _ in groups[key]
+    }
     print(json.dumps({
         "dictionary_total": len(words),
-        "regular_plural_candidates": len(plural),
-        "regular_past_or_participle_candidates": len(past),
-        "ing_candidates": len(ing),
-        "unique_inflected_candidates": len(union),
-        "plural_forms": plural,
-        "past_forms": past,
-        "ing_forms": ing,
+        "regular_plural_count": len(groups["regular_plurals"]),
+        "irregular_plural_count": len(groups["irregular_plurals"]),
+        "regular_past_or_participle_count": len(groups["regular_pasts"]),
+        "irregular_past_or_participle_count": len(groups["irregular_pasts"]),
+        "ing_count": len(groups["ing_forms"]),
+        "unique_simple_inflected_count": len(simple_union),
+        **groups,
     }, ensure_ascii=False))
 
 
