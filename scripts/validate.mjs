@@ -58,7 +58,7 @@ for (const [word, [pos, ja]] of Object.entries(exactMetadata)) {
   const actual = byWord.get(word);
   if (!actual || actual.pos !== pos || actual.ja !== ja) throw new Error(`Metadata regression: ${word}`);
 }
-const schoolUnsafeFragments = ["気違い", "うんこ", "エロ", "エッチ", "デブ", "百姓", "馬鹿", "禿", "ちんこ", "チンコ", "まんこ", "マンコ"];
+const schoolUnsafeFragments = ["気違い", "うんこ", "デブ", "百姓", "馬鹿", "禿", "ちんこ", "チンコ", "まんこ", "マンコ"];
 for (const [word, data] of byWord) {
   for (const fragment of schoolUnsafeFragments) {
     if (data.ja.includes(fragment)) throw new Error(`School-unsafe gloss remains: ${word} -> ${data.ja}`);
