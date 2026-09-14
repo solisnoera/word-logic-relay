@@ -34,9 +34,9 @@ for (const entry of entries) {
   (level === "e" ? easy : hard).add(word);
 }
 if (entries.length !== keys.size || keys.size !== easy.size + hard.size) throw new Error("Dictionary union invariant failed");
-if (keys.size !== 1482) throw new Error(`Unexpected dictionary size: ${keys.size}`);
+if (keys.size < 2400 || keys.size > 3000) throw new Error(`Expanded dictionary outside release range: ${keys.size}`);
 if ([...easy].some((word) => hard.has(word))) throw new Error("EASY/HARD overlap");
-if (easy.size < 650 || hard.size < 650) throw new Error("Answer pools are below release threshold");
+if (easy.size < 850 || hard.size < 850) throw new Error(`Answer pools are below expanded release threshold: EASY ${easy.size}, HARD ${hard.size}`);
 
 const commonRequired = "APPLE HOUSE WORLD LIGHT TRAIN BRAIN MUSIC MONEY WATER BEACH PHONE WRITE DRINK LEARN TEACH SPEAK DRIVE HAPPY SMALL BLACK WHITE CLEAN SWEET THEIR THERE THESE EMAIL BOOKS WOMEN TODAY THREE THINK GREAT RIGHT SHEEP SMELL PIZZA JUICE DIARY PANDA SALAD SUNNY RAINY LUCKY TIRED TOOTH TOWEL".split(" ");
 const hardRequired = "ACRID GUILE KNAVE MIDGE QUAFF SEDGE SHREW VIXEN WHELP".split(" ");
@@ -58,7 +58,7 @@ for (const [word, [pos, ja]] of Object.entries(exactMetadata)) {
   const actual = byWord.get(word);
   if (!actual || actual.pos !== pos || actual.ja !== ja) throw new Error(`Metadata regression: ${word}`);
 }
-const schoolUnsafeFragments = ["気違い", "うんこ", "エロ", "エッチ", "デブ", "百姓", "馬鹿", "禿"];
+const schoolUnsafeFragments = ["気違い", "うんこ", "エロ", "エッチ", "デブ", "百姓", "馬鹿", "禿", "ちんこ", "チンコ", "まんこ", "マンコ"];
 for (const [word, data] of byWord) {
   for (const fragment of schoolUnsafeFragments) {
     if (data.ja.includes(fragment)) throw new Error(`School-unsafe gloss remains: ${word} -> ${data.ja}`);
@@ -105,8 +105,11 @@ if (context.applyTimeBonus(179, 1) !== 189 || context.applyTimeBonus(42, 3) !== 
 
 const audit = fs.readFileSync(path.join(root, "docs/dictionary-audit.md"), "utf8");
 if (!audit.includes("Remaining plausible/valid candidates not added: 0")) throw new Error("Coverage audit is unresolved");
+const expansionReport = path.join(root, "docs/dictionary-expansion-report.md");
+if (!fs.existsSync(expansionReport)) throw new Error("Dictionary expansion report missing");
+
 console.log(JSON.stringify({
   status: "ok", total: keys.size, easy: easy.size, hard: hard.size,
   duplicateLetterCases: cases.length, runtimeExternalCalls: 0,
-  metadataFixLayer: true
+  metadataFixLayer: true, expansionReport: true
 }));
