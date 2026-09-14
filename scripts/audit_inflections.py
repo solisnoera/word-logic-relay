@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit simple inflectional forms in the shipped five-letter dictionary."""
+"""Audit regular inflectional forms in the shipped five-letter dictionary."""
 from __future__ import annotations
 
 import json
@@ -15,7 +15,7 @@ EJ_SRC = f"https://raw.githubusercontent.com/kujirahand/EJDict/{EJDICT_REV}/src/
 
 
 def request_text(url: str) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": "word-logic-relay-inflection-audit/1.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": "word-logic-relay-inflection-audit/1.1"})
     with urllib.request.urlopen(req, timeout=120) as response:
         return response.read().decode("utf-8")
 
@@ -28,85 +28,91 @@ def load_words() -> list[str]:
     return [entry[0].lower() for entry in json.loads(match.group(1))]
 
 
-def load_ejdict_heads() -> set[str]:
+def load_ejdict_lexicon() -> tuple[set[str], set[str], set[str]]:
     heads: set[str] = set()
+    countable_nouns: set[str] = set()
+    verbs: set[str] = set()
     for letter in string.ascii_lowercase:
         for line in request_text(EJ_SRC.format(letter=letter)).splitlines():
             if "\t" not in line:
                 continue
-            head, _ = line.split("\t", 1)
+            head, meaning = line.split("\t", 1)
             for variant in head.split(","):
                 word = variant.strip().lower()
-                if re.fullmatch(r"[a-z]+", word):
-                    heads.add(word)
-    return heads
+                if not re.fullmatch(r"[a-z]+", word):
+                    continue
+                heads.add(word)
+                if "〈C〉" in meaning:
+                    countable_nouns.add(word)
+                if "{動}" in meaning:
+                    verbs.add(word)
+    return heads, countable_nouns, verbs
 
 
-def plural_base(word: str, lexicon: set[str]) -> str | None:
-    # Prefer plain -s first: SHOES -> SHOE, WEEKS -> WEEK.
-    if word.endswith("s") and not word.endswith("ss") and word[:-1] in lexicon:
-        return word[:-1]
-    # -es after sibilants etc.: BOXES -> BOX, BUSES -> BUS.
-    if word.endswith("es") and word[:-2] in lexicon:
-        return word[:-2]
-    # consonant+y -> -ies: FLIES -> FLY.
-    if word.endswith("ies") and (word[:-3] + "y") in lexicon:
+def plural_base(word: str, nouns: set[str]) -> str | None:
+    # spelling alternations first
+    if word.endswith("ies") and (word[:-3] + "y") in nouns:
         return word[:-3] + "y"
-    # common f/fe -> ves spelling alternation.
     if word.endswith("ves"):
         for base in (word[:-3] + "f", word[:-3] + "fe"):
-            if base in lexicon:
+            if base in nouns:
                 return base
-    return None
-
-
-def past_base(word: str, lexicon: set[str]) -> str | None:
-    # consonant+y -> -ied: TRIED -> TRY.
-    if word.endswith("ied") and (word[:-3] + "y") in lexicon:
-        return word[:-3] + "y"
-    # verbs ending in e take -d: LOVED -> LOVE.
-    if word.endswith("d") and word[:-1] in lexicon:
+    # plain -s: WEEKS -> WEEK, SHOES -> SHOE
+    if word.endswith("s") and not word.endswith("ss") and word[:-1] in nouns:
         return word[:-1]
-    # ordinary -ed: ASKED -> ASK, ADDED -> ADD.
-    if word.endswith("ed") and word[:-2] in lexicon:
+    # -es: BOXES -> BOX, BUSES -> BUS
+    if word.endswith("es") and word[:-2] in nouns:
         return word[:-2]
     return None
 
 
-def ing_base(word: str, lexicon: set[str]) -> str | None:
+def past_base(word: str, verbs: set[str]) -> str | None:
+    if word.endswith("ied") and (word[:-3] + "y") in verbs:
+        return word[:-3] + "y"
+    if not word.endswith("ed"):
+        return None
+    # silent-e verbs take only -d: MOVED -> MOVE
+    if word[:-1].endswith("e") and word[:-1] in verbs:
+        return word[:-1]
+    # ordinary -ed: ASKED -> ASK, ADDED -> ADD
+    if word[:-2] in verbs:
+        return word[:-2]
+    return None
+
+
+def ing_base(word: str, verbs: set[str]) -> str | None:
     if not word.endswith("ing"):
         return None
     stem = word[:-3]
-    if stem in lexicon:
+    if stem in verbs:
         return stem
-    # silent-e deletion: USING -> USE.
-    if (stem + "e") in lexicon:
-        return stem + "e"
-    # ie -> y: DYING -> DIE, LYING -> LIE, TYING -> TIE.
-    if word.endswith("ying") and (word[:-4] + "ie") in lexicon:
+    # ie -> y must be checked before generic silent-e restoration.
+    if word.endswith("ying") and (word[:-4] + "ie") in verbs:
         return word[:-4] + "ie"
-    # doubled final consonant, included for completeness.
-    if len(stem) >= 2 and stem[-1] == stem[-2] and stem[:-1] in lexicon:
+    # silent-e deletion: USING -> USE, AGING -> AGE
+    if (stem + "e") in verbs:
+        return stem + "e"
+    if len(stem) >= 2 and stem[-1] == stem[-2] and stem[:-1] in verbs:
         return stem[:-1]
     return None
 
 
 def main() -> None:
     words = load_words()
-    lexicon = load_ejdict_heads()
-    plural = [(w.upper(), b.upper()) for w in words if (b := plural_base(w, lexicon))]
-    past = [(w.upper(), b.upper()) for w in words if (b := past_base(w, lexicon))]
-    ing = [(w.upper(), b.upper()) for w in words if (b := ing_base(w, lexicon))]
+    _, nouns, verbs = load_ejdict_lexicon()
+    plural = [(w.upper(), b.upper()) for w in words if (b := plural_base(w, nouns))]
+    past = [(w.upper(), b.upper()) for w in words if (b := past_base(w, verbs))]
+    ing = [(w.upper(), b.upper()) for w in words if (b := ing_base(w, verbs))]
     union = {w for w, _ in plural + past + ing}
     print(json.dumps({
         "dictionary_total": len(words),
-        "plural_or_3sg_candidates": len(plural),
-        "past_or_participle_candidates": len(past),
+        "regular_plural_candidates": len(plural),
+        "regular_past_or_participle_candidates": len(past),
         "ing_candidates": len(ing),
         "unique_inflected_candidates": len(union),
-        "plural_examples": plural[:80],
-        "past_examples": past[:80],
-        "ing_examples": ing[:80],
+        "plural_forms": plural,
+        "past_forms": past,
+        "ing_forms": ing,
     }, ensure_ascii=False))
 
 
