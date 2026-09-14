@@ -6,8 +6,9 @@
     word, level: level === "e" ? "easy" : "hard", pos, ja: ja.split("／")
   }));
   const WORD_BY_TEXT = new Map(WORDS.map((entry) => [entry.word, entry]));
-  const EASY_WORDS = WORDS.filter((entry) => entry.level === "easy").map((entry) => entry.word);
-  const HARD_WORDS = WORDS.filter((entry) => entry.level === "hard").map((entry) => entry.word);
+  const ANSWER_EXCLUSIONS = new Set(window.ANSWER_EXCLUSIONS || []);
+  const EASY_WORDS = WORDS.filter((entry) => entry.level === "easy" && !ANSWER_EXCLUSIONS.has(entry.word)).map((entry) => entry.word);
+  const HARD_WORDS = WORDS.filter((entry) => entry.level === "hard" && !ANSWER_EXCLUSIONS.has(entry.word)).map((entry) => entry.word);
   const VALID_WORDS = new Set(WORD_BY_TEXT.keys());
   const MODES = {
     normal: { name: ["", "SOLO", "DUO", "TRIO", "FOUR", "FIVE", "SIX"] },
@@ -124,7 +125,7 @@
   }
 
   function pickDaily(count) {
-    const seed = hashString(`WLR-DICT-3|${japanDateKey()}`);
+    const seed = hashString(`WLR-DICT-4|${japanDateKey()}`);
     return seededShuffle(EASY_WORDS, seed).slice(0, count);
   }
 
