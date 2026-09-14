@@ -1,0 +1,46 @@
+name: Dictionary expansion
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - scripts/expand_dictionary.py
+      - .github/workflows/dictionary-expand.yml
+
+permissions:
+  contents: write
+
+jobs:
+  expand:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build expanded local dictionary
+        run: python scripts/expand_dictionary.py
+      - name: Validate release invariants
+        run: node scripts/validate.mjs
+      - name: Check diff
+        run: git diff --check
+      - name: Commit generated dictionary
+        shell: bash
+        run: |
+          git add dist/assets/words.js docs/dictionary-expansion-report.md
+          if git diff --cached --quiet; then
+            echo "No generated dictionary changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Expand embedded dictionary"
+          git push
