@@ -6,6 +6,8 @@ on:
     branches: [main]
     paths:
       - scripts/expand_dictionary.py
+      - scripts/validate.mjs
+      - dist/assets/game.js
       - .github/workflows/dictionary-expand.yml
 
 permissions:
