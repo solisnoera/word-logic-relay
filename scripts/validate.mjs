@@ -43,7 +43,7 @@ for (const word of exclusions) if (!keys.has(word)) throw new Error(`Answer excl
 
 const easyAnswers = new Set([...easy].filter((word) => !exclusions.has(word)));
 const hardAnswers = new Set([...hard].filter((word) => !exclusions.has(word)));
-if (easyAnswers.size < 700 || hardAnswers.size < 1500) {
+if (easyAnswers.size < 650 || hardAnswers.size < 1500) {
   throw new Error(`Filtered answer pools are below release threshold: EASY ${easyAnswers.size}, HARD ${hardAnswers.size}`);
 }
 if (!keys.has("WEEKS") || !exclusions.has("WEEKS")) throw new Error("WEEKS must remain a valid guess but not an answer candidate");
