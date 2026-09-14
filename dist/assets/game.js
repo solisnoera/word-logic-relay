@@ -124,7 +124,7 @@
   }
 
   function pickDaily(count) {
-    const seed = hashString(`WLR-DICT-2|${japanDateKey()}`);
+    const seed = hashString(`WLR-DICT-3|${japanDateKey()}`);
     return seededShuffle(EASY_WORDS, seed).slice(0, count);
   }
 
@@ -437,12 +437,16 @@
     document.querySelectorAll(".answer-chip").forEach((chip) => chip.setAttribute("aria-expanded", String(chip === button)));
     $("definition").replaceChildren();
     const title = document.createElement("strong");
-    const pos = document.createElement("em");
     const meaning = document.createElement("span");
     title.textContent = entry.word;
-    pos.textContent = entry.pos;
     meaning.textContent = entry.ja.join("／");
-    $("definition").append(title, pos, meaning);
+    $("definition").append(title);
+    if (entry.pos) {
+      const pos = document.createElement("em");
+      pos.textContent = entry.pos;
+      $("definition").append(pos);
+    }
+    $("definition").append(meaning);
     $("definition").focus({ preventScroll: true });
   }
 
@@ -459,35 +463,25 @@
     }
   }
 
-  function setMessage(text) { $("message").textContent = text; }
-
   function reject(message) {
     setMessage(message);
+    document.querySelectorAll(`.row[data-row="${state.tries}"]`).forEach((row) => restartAnimation(row, "shake"));
     flash(false);
-    tone(72, .08, "sawtooth", .04);
-    for (let board = 0; board < state.mode; board += 1) {
-      if (state.solved[board]) continue;
-      for (let column = 0; column < 5; column += 1) {
-        const tile = tileAt(board, state.tries, column);
-        if (tile) restartAnimation(tile, "shake");
-      }
-    }
+    tone(82, .1, "square", .045);
   }
 
+  function setMessage(text) { $("message").textContent = text; }
+  function restartAnimation(element, className) {
+    element.classList.remove(className); void element.offsetWidth; element.classList.add(className);
+  }
   function flash(good) {
     const zone = $("boardZone");
     restartAnimation(zone, good ? "good" : "bad");
   }
 
-  function restartAnimation(element, className) {
-    element.classList.remove(className);
-    void element.offsetWidth;
-    element.classList.add(className);
-  }
-
   function schedule(callback, delay) {
     const id = setTimeout(() => {
-      state.scheduled = state.scheduled.filter((value) => value !== id);
+      state.scheduled = state.scheduled.filter((item) => item !== id);
       callback();
     }, delay);
     state.scheduled.push(id);
@@ -525,76 +519,30 @@
   function unlockAudio() {
     try {
       if (!state.audioContext) {
-        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        if (!AudioContextClass) return;
-        state.audioContext = new AudioContextClass();
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        state.audioContext = new AudioCtx();
       }
-      if (state.audioContext.state === "suspended") state.audioContext.resume().catch(() => {});
-    } catch (_) { /* Audio is optional. */ }
+      if (state.audioContext.state === "suspended") state.audioContext.resume();
+    } catch (_) { state.audioContext = null; }
   }
 
-  function tone(frequency, duration, type = "square", volume = .03) {
-    const context = state.audioContext;
-    if (!context || context.state !== "running") return;
+  function tone(frequency, duration, type = "square", gainValue = .025, delay = 0) {
+    const ctx = state.audioContext;
+    if (!ctx) return;
     try {
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.type = type;
-      oscillator.frequency.value = frequency;
-      gain.gain.setValueAtTime(volume, context.currentTime);
-      gain.gain.exponentialRampToValueAtTime(.001, context.currentTime + duration);
-      oscillator.connect(gain); gain.connect(context.destination);
-      oscillator.start(); oscillator.stop(context.currentTime + duration);
-    } catch (_) { /* Audio is optional. */ }
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = type; oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(gainValue, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + delay + duration);
+      oscillator.connect(gain).connect(ctx.destination);
+      oscillator.start(ctx.currentTime + delay); oscillator.stop(ctx.currentTime + delay + duration);
+    } catch (_) {}
   }
 
-  function successTone() {
-    tone(330, .07); schedule(() => tone(495, .08), 75);
-  }
+  function successTone() { tone(392, .08, "square", .025); tone(523, .1, "square", .025, .07); }
+  function winTone() { [392, 494, 587, 784].forEach((frequency, index) => tone(frequency, .15, "triangle", .035, index * .09)); }
 
-  function winTone() {
-    [262, 330, 392, 523].forEach((frequency, index) => schedule(() => tone(frequency, .12, "square", .035), index * 90));
-  }
-
-  window.WLR_TEST = Object.freeze({
-    judge, japanDateKey, hashString, seededShuffle, applyTimeBonus,
-    dictionary: WORDS, easyWords: EASY_WORDS, hardWords: HARD_WORDS,
-    validWords: VALID_WORDS,
-    startMode: (mode, special = "normal", difficulty = "easy") => { setDifficulty(difficulty); startGame(mode, special); },
-    snapshot: () => ({ ...state, validCount: VALID_WORDS.size })
-  });
-
-  function registerWebMcp() {
-    const context = document.modelContext;
-    if (!context?.registerTool) return;
-    const modeMap = { solo: [1, "normal"], duo: [2, "normal"], trio: [3, "normal"], four: [4, "normal"], five: [5, "normal"], six: [6, "normal"], boss: [6, "boss"], blind: [4, "blind"], time: [4, "time"], daily: [4, "daily"] };
-    try {
-      void Promise.resolve(context.registerTool({
-        name: "start_word_logic_run",
-        title: "Start WORD LOGIC run",
-        description: "Start a visible game run in one of the ten available modes.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            mode: { type: "string", enum: Object.keys(modeMap) },
-            difficulty: { type: "string", enum: ["easy", "hard"] }
-          },
-          required: ["mode"], additionalProperties: false
-        },
-        annotations: { readOnlyHint: false, untrustedContentHint: false },
-        execute(input) {
-          if (!input || typeof input !== "object" || !modeMap[input.mode]) throw new Error("Unknown mode");
-          const difficulty = input.mode === "daily" ? "easy" : input.difficulty || "easy";
-          if (!['easy', 'hard'].includes(difficulty)) throw new Error("Unknown difficulty");
-          const [boards, special] = modeMap[input.mode];
-          setDifficulty(difficulty);
-          startGame(boards, special);
-          return { mode: input.mode, difficulty, boards, maxTries: state.maxTries };
-        }
-      })).catch(() => {});
-    } catch (_) { /* WebMCP is optional outside supporting browsers. */ }
-  }
-
-  boot();
-  registerWebMcp();
+  document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", boot) : boot();
 })();
