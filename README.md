@@ -5,17 +5,27 @@ Dedicated, self-contained implementation of the five-letter relay game. The sour
 Published Site: https://word-logic-relay-v2.riyo-timid.chatgpt.site
 
 - Runtime: static HTML/CSS/JavaScript
-- Dictionary: 1482 embedded local valid words / answer candidates
-- Current answer pools: EASY 770 / HARD 712
-- Dictionary corrections: `dist/assets/metadata-fixes.js` repairs reviewed POS/Japanese glosses and obvious difficulty classifications without changing the word set
+- Dictionary: 2,634 embedded local valid words / answer candidates
+- Current answer pools after corrections: EASY 787 / HARD 1,847
+- Expansion: 1,152 words added over the pinned 1,482-word baseline
+- Japanese glosses: existing reviewed corrections plus direct EJDict glosses for expansion entries
+- Part of speech: shown when confidently available; intentionally optional rather than guessed
 - External runtime calls: none
 - Reference snapshot: `reference/original-word-logic-relay.html`
+
+## Dictionary policy
+
+Every embedded word is a valid guess. EASY and HARD are disjoint answer pools, but guesses may use words from either pool.
+
+EASY is deliberately conservative: it is for clearly common/general words. A normal word classified as HARD is still accepted as a guess; this avoids rejecting legitimate words merely to keep EASY tightly curated. HARD may contain unusual but legitimate English words.
+
+The deterministic expansion pipeline is `scripts/expand_dictionary.py`. It always starts from the pinned 1,482-word baseline, so repeated builds do not grow cumulatively. See `docs/dictionary-audit.md` and `docs/dictionary-expansion-report.md` for sources, counts, filters, and validation policy.
 
 ## Source of truth
 
 The `main` branch of this repository is the single source of truth. Do not edit the ChatGPT Site directly. Make and verify changes here first, then publish the same committed revision to the existing Site.
 
-The repository's root commit is the source revision used by the initial published Site version. See `PROJECT_MEMORY.md` for the baseline provenance and release checks, and `docs/dictionary-audit.md` for dictionary construction and metadata-quality details.
+The repository's root commit is the source revision used by the initial published Site version. See `PROJECT_MEMORY.md` for the baseline provenance and release checks.
 
 ## Update and publish workflow
 
