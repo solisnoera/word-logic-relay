@@ -16,3 +16,4 @@
 - Expansion candidates without a concise school-safe Japanese gloss are skipped even when the English word itself is valid. Coverage quality has priority over reaching an arbitrary maximum word count.
 - DAILY uses a dictionary-version seed; dictionary-content or answer-pool changes intentionally change the daily puzzle generation version.
 - No gameplay-critical persistence is used. Daily answers derive from the Japan date and the shipped dictionary version.
+- The title selector always keeps DIFFICULTY, NORMAL, and SPECIAL as vertically stacked sections. Short landscape viewports may compact spacing, but must not switch to the split two-column layout that turns SPECIAL modes into tall cards.
